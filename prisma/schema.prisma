@@ -1,0 +1,385 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum CenterRole {
+  OWNER
+  MANAGER
+  TEACHER
+}
+
+enum RecordStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum SessionStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+}
+
+enum AttendanceStatus {
+  NOT_MARKED
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
+}
+
+enum AssignmentStatus {
+  ASSIGNED
+  COMPLETED
+  NEEDS_REVIEW
+}
+
+enum TransferStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  CANCELLED
+}
+
+enum LibraryScope {
+  COMMON
+  GRADE
+  CLASS
+}
+
+model User {
+  id                       String            @id @default(cuid())
+  name                     String
+  email                    String            @unique
+  emailVerified            Boolean           @default(false)
+  image                    String?
+  createdAt                DateTime          @default(now())
+  updatedAt                DateTime          @updatedAt
+  sessions                 Session[]         @relation("AuthSessionUser")
+  accounts                 Account[]
+  membership               Membership?
+  assignedLearners         Learner[]         @relation("LearnerTeacher")
+  taughtSessions           TeachingSession[] @relation("SessionTeacher")
+  lessonNotes              LessonNote[]
+  progressUpdates          ProgressUpdate[]
+  invitationsSent          Invitation[]      @relation("InvitationSender")
+  transferRequestsSent     TransferRequest[] @relation("TransferRequester")
+  transferRequestsReceived TransferRequest[] @relation("TransferRecipient")
+  documentsUploaded        LibraryDocument[] @relation("LibraryDocumentUploader")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation("AuthSessionUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Account {
+  id                    String    @id @default(cuid())
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+}
+
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+}
+
+model Center {
+  id          String            @id @default(cuid())
+  singleton   Boolean           @unique @default(true)
+  name        String
+  timezone    String            @default("Asia/Ho_Chi_Minh")
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  memberships Membership[]
+  learners    Learner[]
+  groups      TeachingGroup[]
+  grades      Grade[]
+  sessions    TeachingSession[]
+  lessons     Lesson[]
+  notes       LessonNote[]
+  assignments Assignment[]
+  progress    ProgressUpdate[]
+  invitations Invitation[]
+  transfers   TransferRequest[]
+  documents   LibraryDocument[]
+}
+
+model Grade {
+  id          String            @id @default(cuid())
+  centerId    String
+  name        String
+  description String?
+  status      RecordStatus      @default(ACTIVE)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  center      Center            @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  classes     TeachingGroup[]
+  documents   LibraryDocument[]
+
+  @@unique([centerId, name])
+  @@index([centerId, status])
+}
+
+model Membership {
+  id        String     @id @default(cuid())
+  centerId  String
+  userId    String
+  role      CenterRole @default(TEACHER)
+  title     String?
+  createdAt DateTime   @default(now())
+  center    Center     @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([centerId, userId])
+  @@unique([userId])
+  @@index([userId])
+}
+
+model Learner {
+  id                String            @id @default(cuid())
+  centerId          String
+  assignedTeacherId String?
+  name              String
+  email             String?
+  phone             String?
+  level             String?
+  goal              String?
+  notes             String?
+  status            RecordStatus      @default(ACTIVE)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  center            Center            @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  assignedTeacher   User?             @relation("LearnerTeacher", fields: [assignedTeacherId], references: [id], onDelete: SetNull)
+  groupLinks        GroupLearner[]
+  sessions          TeachingSession[]
+  lessonNotes       LessonNote[]
+  assignments       Assignment[]
+  progressUpdates   ProgressUpdate[]
+  transferRequests  TransferRequest[]
+
+  @@index([centerId, status])
+  @@index([assignedTeacherId])
+}
+
+model TeachingGroup {
+  id          String            @id @default(cuid())
+  centerId    String
+  gradeId     String?
+  name        String
+  level       String?
+  description String?
+  status      RecordStatus      @default(ACTIVE)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  center      Center            @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  grade       Grade?            @relation(fields: [gradeId], references: [id], onDelete: SetNull)
+  learners    GroupLearner[]
+  sessions    TeachingSession[]
+  assignments Assignment[]
+  documents   LibraryDocument[]
+
+  @@unique([centerId, name])
+  @@index([centerId, status])
+  @@index([gradeId])
+}
+
+model GroupLearner {
+  groupId   String
+  learnerId String
+  group     TeachingGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  learner   Learner       @relation(fields: [learnerId], references: [id], onDelete: Cascade)
+  joinedAt  DateTime      @default(now())
+
+  @@id([groupId, learnerId])
+}
+
+model TeachingSession {
+  id         String           @id @default(cuid())
+  centerId   String
+  teacherId  String
+  learnerId  String?
+  groupId    String?
+  title      String
+  startsAt   DateTime
+  endsAt     DateTime
+  status     SessionStatus    @default(SCHEDULED)
+  attendance AttendanceStatus @default(NOT_MARKED)
+  location   String?
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+  center     Center           @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  teacher    User             @relation("SessionTeacher", fields: [teacherId], references: [id], onDelete: Restrict)
+  learner    Learner?         @relation(fields: [learnerId], references: [id], onDelete: SetNull)
+  group      TeachingGroup?   @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  notes      LessonNote[]
+
+  @@index([centerId, startsAt])
+  @@index([teacherId, startsAt])
+}
+
+model Lesson {
+  id        String       @id @default(cuid())
+  centerId  String
+  title     String
+  subject   String?
+  level     String?
+  content   String?
+  materials String?
+  status    RecordStatus @default(ACTIVE)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  center    Center       @relation(fields: [centerId], references: [id], onDelete: Cascade)
+
+  @@index([centerId, status])
+}
+
+model LessonNote {
+  id        String           @id @default(cuid())
+  centerId  String
+  learnerId String
+  teacherId String
+  sessionId String?
+  title     String
+  content   String
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  center    Center           @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  learner   Learner          @relation(fields: [learnerId], references: [id], onDelete: Cascade)
+  teacher   User             @relation(fields: [teacherId], references: [id], onDelete: Restrict)
+  session   TeachingSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+
+  @@index([centerId, learnerId, createdAt])
+}
+
+model Assignment {
+  id          String           @id @default(cuid())
+  centerId    String
+  learnerId   String?
+  groupId     String?
+  title       String
+  description String?
+  dueAt       DateTime?
+  status      AssignmentStatus @default(ASSIGNED)
+  completedAt DateTime?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  center      Center           @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  learner     Learner?         @relation(fields: [learnerId], references: [id], onDelete: Cascade)
+  group       TeachingGroup?   @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@index([centerId, status, dueAt])
+}
+
+model ProgressUpdate {
+  id         String   @id @default(cuid())
+  centerId   String
+  learnerId  String
+  teacherId  String
+  subject    String
+  metric     String?
+  score      Float?
+  note       String?
+  recordedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  center     Center   @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  learner    Learner  @relation(fields: [learnerId], references: [id], onDelete: Cascade)
+  teacher    User     @relation(fields: [teacherId], references: [id], onDelete: Restrict)
+
+  @@index([centerId, learnerId, recordedAt])
+}
+
+model Invitation {
+  id          String     @id @default(cuid())
+  centerId    String
+  email       String
+  role        CenterRole @default(TEACHER)
+  tokenHash   String     @unique
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  invitedById String
+  createdAt   DateTime   @default(now())
+  center      Center     @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  invitedBy   User       @relation("InvitationSender", fields: [invitedById], references: [id], onDelete: Cascade)
+
+  @@index([centerId, email])
+}
+
+model TransferRequest {
+  id              String         @id @default(cuid())
+  centerId        String
+  learnerId       String
+  requesterId     String
+  targetTeacherId String
+  status          TransferStatus @default(PENDING)
+  message         String?
+  responseMessage String?
+  createdAt       DateTime       @default(now())
+  respondedAt     DateTime?
+  center          Center         @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  learner         Learner        @relation(fields: [learnerId], references: [id], onDelete: Cascade)
+  requester       User           @relation("TransferRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  targetTeacher   User           @relation("TransferRecipient", fields: [targetTeacherId], references: [id], onDelete: Cascade)
+
+  @@index([centerId, status, createdAt])
+  @@index([requesterId, status])
+  @@index([targetTeacherId, status])
+  @@index([learnerId, status])
+}
+
+model LibraryDocument {
+  id           String         @id @default(cuid())
+  centerId     String
+  scope        LibraryScope
+  gradeId      String?
+  groupId      String?
+  uploadedById String?
+  title        String
+  description  String?
+  fileName     String
+  contentType  String
+  size         Int
+  content      Bytes
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  center       Center         @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  grade        Grade?         @relation(fields: [gradeId], references: [id], onDelete: SetNull)
+  group        TeachingGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  uploadedBy   User?          @relation("LibraryDocumentUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@index([centerId, scope, createdAt])
+  @@index([gradeId])
+  @@index([groupId])
+}
