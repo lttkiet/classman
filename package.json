@@ -4,6 +4,7 @@
   "type": "module",
   "private": true,
   "scripts": {
+    "dev:setup": "node scripts/dev-setup.mjs",
     "dev": "next dev",
     "build": "prisma generate && next build",
     "start": "next start",

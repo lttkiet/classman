@@ -15,15 +15,12 @@ Owners and managers can upload PDF, Word, PowerPoint, plain text, and PNG/JPEG/W
 
 ## Local setup
 
-1. Install Node.js 20.9 or newer and Docker Desktop.
-2. Copy `.env.example` to `.env` and set `BETTER_AUTH_SECRET` to a random value of at least 32 characters.
-3. Start PostgreSQL with `docker compose up -d db`.
-4. Install packages with `npm install`.
-5. Generate the Prisma client and create the database tables with `npm run db:generate` and `npm run db:migrate`.
-6. Set `BOOTSTRAP_ADMIN_EMAIL`, `BOOTSTRAP_ADMIN_NAME`, `BOOTSTRAP_ADMIN_PASSWORD`, and `BOOTSTRAP_CENTER_NAME`, then run `npm run db:bootstrap` to create the first owner and center. This command refuses to run after a user already exists.
-7. Start the app with `npm run dev`. Owners and managers provision staff from the Team page by inviting an email address and assigning a role.
-8. In development without SMTP, verification, reset, and invitation emails are printed to the server terminal. Invitees open the link, set a password, and verify their email before joining.
-9. Seed sample records into the bootstrapped center with `npm run db:seed`.
+1. Install Node.js 20.9 or newer, Docker Desktop, and npm dependencies with `npm install`.
+2. Run `npm run dev:setup` to fill missing `.env` values, start the local PostgreSQL container, apply migrations, and generate Prisma Client. On an empty database it creates a demo admin and sample center records.
+3. Start the app with `npm run dev`. Owners and managers provision staff from the Team page by inviting an email address and assigning a role.
+4. In development without SMTP, verification, reset, and invitation emails are printed to the server terminal. Invitees open the link, set a password, and verify their email before joining.
+
+`dev:setup` is strictly for local development. It refuses production, Vercel, CI, and non-local database or app URLs. On a new local database it uses `admin@classman.test` / `ClassmanDev123!`; change those development credentials before sharing the environment. Existing database data is preserved and skips the demo bootstrap and seeding.
 
 `npm run db:deploy` applies checked-in migrations in a deployment environment. Set `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `APP_URL`, and SMTP settings in the hosting provider. Keep `BETTER_AUTH_URL` and `APP_URL` on the public app origin. Email verification and team invitations require a working SMTP configuration in production.
 
