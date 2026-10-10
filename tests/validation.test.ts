@@ -1,3 +1,4 @@
+import { libraryDocumentSchema } from "../src/lib/validation.ts";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { resourceSchemas } from "../src/lib/validation.ts";
@@ -23,4 +24,26 @@ test("validates session timestamps and attendance updates", () => {
 test("validates assignment state and progress score bounds", () => {
   assert.equal(resourceSchemas.assignments.safeParse({ title: "Read chapter", learnerId: "learner-1", status: "ASSIGNED" }).success, true);
   assert.equal(resourceSchemas.progress.safeParse({ learnerId: "learner-1", subject: "Speaking", score: 110 }).success, false);
+});
+
+test("libraryDocumentSchema validates scopes and gradeId/groupId presence properly", () => {
+
+
+  // COMMON scope: shouldn't have gradeId or groupId
+  assert.equal(libraryDocumentSchema.safeParse({ title: "Rules", scope: "COMMON" }).success, true);
+  assert.equal(libraryDocumentSchema.safeParse({ title: "Rules", scope: "COMMON", gradeId: "g1" }).success, false);
+  assert.equal(libraryDocumentSchema.safeParse({ title: "Rules", scope: "COMMON", groupId: "c1" }).success, false);
+  assert.equal(libraryDocumentSchema.safeParse({ title: "Rules", scope: "COMMON", gradeId: "g1", groupId: "c1" }).success, false);
+
+  // GRADE scope: should have gradeId, shouldn't have groupId
+  assert.equal(libraryDocumentSchema.safeParse({ title: "G1 Math", scope: "GRADE", gradeId: "g1" }).success, true);
+  assert.equal(libraryDocumentSchema.safeParse({ title: "G1 Math", scope: "GRADE" }).success, false);
+  assert.equal(libraryDocumentSchema.safeParse({ title: "G1 Math", scope: "GRADE", groupId: "c1" }).success, false);
+  assert.equal(libraryDocumentSchema.safeParse({ title: "G1 Math", scope: "GRADE", gradeId: "g1", groupId: "c1" }).success, false);
+
+  // CLASS scope: should have groupId, shouldn't have gradeId
+  assert.equal(libraryDocumentSchema.safeParse({ title: "C1 Test", scope: "CLASS", groupId: "c1" }).success, true);
+  assert.equal(libraryDocumentSchema.safeParse({ title: "C1 Test", scope: "CLASS" }).success, false);
+  assert.equal(libraryDocumentSchema.safeParse({ title: "C1 Test", scope: "CLASS", gradeId: "g1" }).success, false);
+  assert.equal(libraryDocumentSchema.safeParse({ title: "C1 Test", scope: "CLASS", gradeId: "g1", groupId: "c1" }).success, false);
 });
