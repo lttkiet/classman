@@ -28,17 +28,10 @@ export async function POST(request: Request) {
         { status: 422 },
       );
     const email = parsed.data.email.toLowerCase();
-    const existing = await db.user.findUnique({
-      where: { email },
+    const existingMembership = await db.membership.findFirst({
+      where: { user: { email } },
       select: { id: true },
     });
-    let existingMembership = null;
-    if (existing) {
-      existingMembership = await db.membership.findUnique({
-        where: { userId: existing.id },
-        select: { id: true },
-      });
-    }
     if (existingMembership)
       return NextResponse.json(
         { error: "This person is already part of the center." },
