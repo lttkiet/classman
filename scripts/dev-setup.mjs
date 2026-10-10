@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { spawn, spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "cross-spawn";
 import { setTimeout as delay } from "node:timers/promises";
 
 const envPath = ".env";
@@ -60,7 +60,7 @@ function assertDevelopmentEnvironment(values) {
 
 function run(command, args, options = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { stdio: "inherit", env: process.env, shell: process.platform === "win32" && command.endsWith(".cmd"), ...options });
+    const child = spawn(command, args, { stdio: "inherit", env: process.env, ...options });
     child.once("error", reject);
     child.once("exit", (code) => code === 0 ? resolve() : reject(new Error(`${command} ${args.join(" ")} exited with code ${code}.`)));
   });
