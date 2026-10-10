@@ -6,7 +6,7 @@ import { Prisma } from "@prisma/client";
 const load = moduleLoader({
   "next/server": {
     NextResponse: {
-      json: (body: any, init?: any) => {
+      json: (body: unknown, init?: ResponseInit) => {
         return {
           status: init?.status ?? 200,
           json: async () => body,
@@ -21,7 +21,7 @@ const { WorkspaceError } = load<typeof import("../src/lib/workspace.ts")>("src/l
 
 test("jsonError handles WorkspaceError", async () => {
   const error = new WorkspaceError("Test error", 403);
-  const response = http.jsonError(error) as any;
+  const response = http.jsonError(error);
   assert.equal(response.status, 403);
   const data = await response.json();
   assert.equal(data.error, "Test error");
@@ -32,7 +32,7 @@ test("jsonError handles Prisma unique constraint violation", async () => {
     code: "P2002",
     clientVersion: "6.19.0"
   });
-  const response = http.jsonError(error) as any;
+  const response = http.jsonError(error);
   assert.equal(response.status, 409);
   const data = await response.json();
   assert.equal(data.error, "A record with that value already exists.");
@@ -44,7 +44,7 @@ test("jsonError handles generic errors", async () => {
   console.error = (err) => { loggedError = err; };
 
   const error = new Error("Generic error");
-  const response = http.jsonError(error) as any;
+  const response = http.jsonError(error);
 
   console.error = originalError;
 
@@ -73,7 +73,8 @@ test("readJson throws WorkspaceError for invalid JSON", async () => {
   try {
     await http.readJson(request);
     assert.fail("Should have thrown an error");
-  } catch (error: any) {
+  } catch (error: unknown) {
+    assert(error instanceof WorkspaceError);
     assert.equal(error.constructor.name, "WorkspaceError");
     assert.equal(error.message, "Request body must be valid JSON.");
     assert.equal(error.status, 400);

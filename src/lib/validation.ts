@@ -83,6 +83,14 @@ export const libraryDocumentSchema = z.object({
   scope: z.enum(["COMMON", "GRADE", "CLASS"]),
   gradeId: z.string().optional(),
   groupId: z.string().optional(),
-}).refine((input) => input.scope === "COMMON" ? !input.gradeId && !input.groupId : input.scope === "GRADE" ? Boolean(input.gradeId) && !input.groupId : Boolean(input.groupId) && !input.gradeId, {
+}).refine((input) => {
+  if (input.scope === "COMMON") {
+    return !input.gradeId && !input.groupId;
+  }
+  if (input.scope === "GRADE") {
+    return Boolean(input.gradeId) && !input.groupId;
+  }
+  return Boolean(input.groupId) && !input.gradeId;
+}, {
   message: "Choose a matching grade or class for this document.",
 });

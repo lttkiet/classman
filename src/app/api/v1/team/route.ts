@@ -24,8 +24,7 @@ export async function POST(request: Request) {
     const parsed = invitationSchema.safeParse(await readJson(request));
     if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid invitation." }, { status: 422 });
     const email = parsed.data.email.toLowerCase();
-    const existing = await db.user.findUnique({ where: { email }, select: { id: true } });
-    const existingMembership = existing ? await db.membership.findUnique({ where: { userId: existing.id }, select: { id: true } }) : null;
+    const existingMembership = await db.membership.findFirst({ where: { user: { email } }, select: { id: true } });
     if (existingMembership) return NextResponse.json({ error: "This person is already part of the center." }, { status: 409 });
     const token = randomBytes(32).toString("hex");
     const tokenHash = createHash("sha256").update(token).digest("hex");
