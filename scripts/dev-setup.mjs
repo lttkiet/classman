@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { spawn, spawnSync } from "cross-spawn";
+import spawn from "cross-spawn";
 import { setTimeout as delay } from "node:timers/promises";
 
 const envPath = ".env";
@@ -72,7 +72,7 @@ function npmCommand() {
 
 async function waitForDatabase() {
   for (let attempt = 0; attempt < 30; attempt += 1) {
-    const result = spawnSync("docker", ["compose", "exec", "-T", "db", "pg_isready", "-U", "postgres", "-d", "teach_portal"], { stdio: "ignore" });
+    const result = spawn.sync("docker", ["compose", "exec", "-T", "db", "pg_isready", "-U", "postgres", "-d", "teach_portal"], { stdio: "ignore" });
     if (result.status === 0) return;
     await delay(1000);
   }
