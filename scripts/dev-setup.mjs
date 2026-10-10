@@ -96,7 +96,7 @@ async function main() {
 
   assertDevelopmentEnvironment(values);
   writeFileSync(envPath, `${lines.join("\n").replace(/\n+$/, "")}\n`, "utf8");
-  Object.assign(process.env, Object.fromEntries(values));
+  for (const [key, value] of values) { if (process.env[key] === undefined) { process.env[key] = value; } }
   console.log("Development environment defaults saved to .env.");
 
   await run("docker", ["compose", "up", "-d", "db"]);
