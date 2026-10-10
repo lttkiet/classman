@@ -104,13 +104,16 @@ function ResourcePage({ config, role, section }: { config: Config; role: string;
     })).then((data) => setLookups(Object.fromEntries(data))).catch(() => undefined);
   }, [fields]);
 
-  const filtered = useMemo(() => rows.filter((row) => {
-    if (!JSON.stringify(row).toLowerCase().includes(search.toLowerCase())) return false;
+  const filtered = useMemo(() => {
+    const searchLower = search.toLowerCase();
+    return rows.filter((row) => {
+    if (!JSON.stringify(row).toLowerCase().includes(searchLower)) return false;
     if (config.resource !== "sessions" || scheduleFilter === "all") return true;
     const date = new Date(String(row.startsAt));
     if (scheduleFilter === "today") return centerLocalValue(date).slice(0, 10) === centerLocalValue(new Date()).slice(0, 10);
     return row.status === "SCHEDULED" && new Date(String(row.endsAt)) >= new Date();
-  }), [rows, search, scheduleFilter, config.resource]);
+    });
+  }, [rows, search, scheduleFilter, config.resource]);
 
   async function remove(row: JsonRow) {
     if (!window.confirm(t("Delete this {item}? This can’t be undone.", { item: t(config.singular) }))) return;
