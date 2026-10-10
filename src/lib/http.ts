@@ -12,9 +12,7 @@ export function jsonError(error: unknown) {
 }
 
 export async function readJson(request: Request) {
-  try {
-    return await request.json();
-  } catch {
+  return request.json().catch(() => {
     throw new WorkspaceError("Request body must be valid JSON.", 400);
-  }
+  });
 }
