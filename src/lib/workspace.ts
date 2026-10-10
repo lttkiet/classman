@@ -24,7 +24,9 @@ export async function requireWorkspace(roles?: CenterRole[]) {
 }
 
 export class WorkspaceError extends Error {
-  constructor(message: string, public status = 400) {
+  public status: number;
+  constructor(message: string, status = 400) {
     super(message);
+    this.status = status;
   }
 }

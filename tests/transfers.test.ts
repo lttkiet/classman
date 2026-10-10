@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { moduleLoader } from "./load-module.ts";
 
-let mockDb: any = {};
+const mockDb: Record<string, unknown> = {};
 
 class MockWorkspaceError extends Error {
   status: number;
@@ -20,12 +20,12 @@ const loadTransfers = () => {
   return moduleLoader(overrides)("src/lib/transfers.ts") as typeof import("../src/lib/transfers.ts");
 };
 
-function createCtx(role: string = "TEACHER", userId: string = "user-1", centerId: string = "center-1"): any {
+function createCtx(role: string = "TEACHER", userId: string = "user-1", centerId: string = "center-1"): import("../src/lib/workspace.ts").WorkspaceContext {
   return {
     user: { id: userId },
     center: { id: centerId },
     membership: { role },
-  };
+  } as import("../src/lib/workspace.ts").WorkspaceContext;
 }
 
 test("createTransfer - only teachers can request", async () => {
@@ -34,7 +34,7 @@ test("createTransfer - only teachers can request", async () => {
 
   await assert.rejects(
     async () => createTransfer(ctx, { learnerId: "l1", targetTeacherId: "t2" }),
-    (err: any) => err.message === "Only teachers can request a student transfer." && err.status === 403
+    (err: unknown) => err instanceof MockWorkspaceError && err.message === "Only teachers can request a student transfer." && err.status === 403
   );
 });
 
@@ -47,7 +47,7 @@ test("createTransfer - student not actively assigned", async () => {
 
   await assert.rejects(
     async () => createTransfer(ctx, { learnerId: "l1", targetTeacherId: "t2" }),
-    (err: any) => err.message === "This student is not actively assigned to you." && err.status === 404
+    (err: unknown) => err instanceof MockWorkspaceError && err.message === "This student is not actively assigned to you." && err.status === 404
   );
 });
 
@@ -60,7 +60,7 @@ test("createTransfer - target teacher not found", async () => {
 
   await assert.rejects(
     async () => createTransfer(ctx, { learnerId: "l1", targetTeacherId: "t2" }),
-    (err: any) => err.message === "Choose another teacher from your center." && err.status === 422
+    (err: unknown) => err instanceof MockWorkspaceError && err.message === "Choose another teacher from your center." && err.status === 422
   );
 });
 
@@ -73,7 +73,7 @@ test("createTransfer - target teacher is self", async () => {
 
   await assert.rejects(
     async () => createTransfer(ctx, { learnerId: "l1", targetTeacherId: "user-1" }),
-    (err: any) => err.message === "Choose another teacher from your center." && err.status === 422
+    (err: unknown) => err instanceof MockWorkspaceError && err.message === "Choose another teacher from your center." && err.status === 422
   );
 });
 
@@ -87,7 +87,7 @@ test("createTransfer - student already has pending request", async () => {
 
   await assert.rejects(
     async () => createTransfer(ctx, { learnerId: "l1", targetTeacherId: "t2" }),
-    (err: any) => err.message === "This student already has a pending transfer request." && err.status === 409
+    (err: unknown) => err instanceof MockWorkspaceError && err.message === "This student already has a pending transfer request." && err.status === 409
   );
 });
 
@@ -99,7 +99,7 @@ test("createTransfer - creates a request", async () => {
   mockDb.membership = { findFirst: async () => ({ userId: "t2", role: "TEACHER" }) };
   mockDb.transferRequest = {
     findFirst: async () => null,
-    create: async (args: any) => ({ ...args.data, id: "tr-new", include: args.include })
+    create: async (args: import("@prisma/client").Prisma.TransferRequestCreateArgs) => ({ ...args.data, id: "tr-new", include: args.include })
   };
 
   const result = await createTransfer(ctx, { learnerId: "l1", targetTeacherId: "t2", message: "please transfer" });
@@ -109,7 +109,7 @@ test("createTransfer - creates a request", async () => {
   assert.equal(result.requesterId, "user-1");
   assert.equal(result.message, "please transfer");
   assert.equal(result.centerId, "center-1");
-  assert.ok(result.include.learner);
+  assert.ok((result as typeof result & { include: { learner: unknown } }).include.learner);
 });
 
 // Add respondToTransfer test cases to have full coverage
@@ -119,7 +119,7 @@ test("respondToTransfer - only teachers involved can respond", async () => {
 
   await assert.rejects(
     async () => respondToTransfer(ctx, "tr1", { action: "accept" }),
-    (err: any) => err.message === "Only the teachers involved can respond to a transfer." && err.status === 403
+    (err: unknown) => err instanceof MockWorkspaceError && err.message === "Only the teachers involved can respond to a transfer." && err.status === 403
   );
 });
 
@@ -131,7 +131,7 @@ test("respondToTransfer - not found", async () => {
 
   await assert.rejects(
     async () => respondToTransfer(ctx, "tr1", { action: "accept" }),
-    (err: any) => err.message === "Transfer request not found." && err.status === 404
+    (err: unknown) => err instanceof MockWorkspaceError && err.message === "Transfer request not found." && err.status === 404
   );
 });
 
@@ -143,7 +143,7 @@ test("respondToTransfer - cancel, must be requester", async () => {
 
   await assert.rejects(
     async () => respondToTransfer(ctx, "tr1", { action: "cancel" }),
-    (err: any) => err.message === "Only the requesting teacher can cancel this request." && err.status === 403
+    (err: unknown) => err instanceof MockWorkspaceError && err.message === "Only the requesting teacher can cancel this request." && err.status === 403
   );
 });
 
@@ -155,7 +155,7 @@ test("respondToTransfer - accept, must be target teacher", async () => {
 
   await assert.rejects(
     async () => respondToTransfer(ctx, "tr1", { action: "accept" }),
-    (err: any) => err.message === "Only the target teacher can respond to this request." && err.status === 403
+    (err: unknown) => err instanceof MockWorkspaceError && err.message === "Only the target teacher can respond to this request." && err.status === 403
   );
 });
 
@@ -167,6 +167,6 @@ test("respondToTransfer - decline, must be target teacher", async () => {
 
   await assert.rejects(
     async () => respondToTransfer(ctx, "tr1", { action: "decline" }),
-    (err: any) => err.message === "Only the target teacher can respond to this request." && err.status === 403
+    (err: unknown) => err instanceof MockWorkspaceError && err.message === "Only the target teacher can respond to this request." && err.status === 403
   );
 });
