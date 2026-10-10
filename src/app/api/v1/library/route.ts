@@ -5,6 +5,7 @@ import { jsonError } from "@/lib/http";
 import { libraryVisibilityWhere } from "@/lib/library-access";
 import { libraryDocumentSchema } from "@/lib/validation";
 import { requireWorkspace, WorkspaceError } from "@/lib/workspace";
+import sanitize from "sanitize-filename";
 
 const maxFileSize = 15 * 1024 * 1024;
 const allowedTypes = new Set([
@@ -93,7 +94,7 @@ export async function POST(request: Request) {
         scope: parsed.data.scope,
         gradeId: parsed.data.scope === "GRADE" ? parsed.data.gradeId : null,
         groupId: parsed.data.scope === "CLASS" ? parsed.data.groupId : null,
-        fileName: file.name.replace(/[\\/\r\n\0]/g, "_").slice(0, 240),
+        fileName: (sanitize(file.name) || "document").slice(0, 240),
         contentType,
         size: file.size,
         content: new Uint8Array(await file.arrayBuffer()),
