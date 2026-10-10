@@ -13,6 +13,8 @@ type Config = { resource: Resource; title: string; description: string; singular
 type JsonValue = string | number | boolean | null | undefined | Date | JsonRow | JsonRow[];
 type JsonRow = { [key: string]: JsonValue };
 
+const TOAST_DELAY_MS = 2500;
+
 const baseConfigs: Record<string, Config> = {
   grades: { resource: "grades", title: "Grades", description: "Organize your students by grade, with multiple classes in each grade.", singular: "grade", icon: GraduationCap, columns: [{ key: "name", label: "Grade" }, { key: "classes.length", label: "Classes" }, { key: "description", label: "About" }, { key: "status", label: "Status" }], fields: [{ name: "name", label: "Grade name", required: true }, { name: "description", label: "Description", kind: "textarea", full: true }] },
   learners: { resource: "learners", title: "Students", description: "Keep each student’s goals, details, and teaching team in one place.", singular: "student", icon: GraduationCap, columns: [{ key: "name", label: "Student" }, { key: "level", label: "Level" }, { key: "goal", label: "Learning goal" }, { key: "assignedTeacher.name", label: "Teacher" }, { key: "status", label: "Status" }], fields: [{ name: "name", label: "Student name", required: true }, { name: "email", label: "Email", kind: "email" }, { name: "phone", label: "Phone" }, { name: "level", label: "Current level" }, { name: "goal", label: "Learning goal", kind: "textarea", full: true }, { name: "assignedTeacherId", label: "Assigned teacher", kind: "select", full: true }, { name: "notes", label: "Notes", kind: "textarea", full: true }] },
@@ -117,7 +119,7 @@ function ResourcePage({ config, role, section }: { config: Config; role: string;
     if (!response.ok) { setError(result.error ?? "Could not delete this record."); return; }
     setRows((current) => current.filter((item) => item.id !== row.id));
     setToast("deleted");
-    setTimeout(() => setToast(null), 2500);
+    setTimeout(() => setToast(null), TOAST_DELAY_MS);
   }
 
   async function markAssignment(row: JsonRow) {
@@ -171,7 +173,7 @@ function ResourcePage({ config, role, section }: { config: Config; role: string;
     </section>
     {viewing && <RecordDetails config={editorConfig} row={viewing} lookups={lookups} onClose={() => setViewing(null)} />}
     {rosterGroup && <GroupRosterDialog group={rosterGroup} onClose={() => setRosterGroup(null)} onChanged={() => void load()} />}
-    {creating && <RecordModal config={editorConfig} row={editing} lookups={lookups} onClose={() => setCreating(false)} onSaved={async () => { setCreating(false); await load(); setToast("saved"); setTimeout(() => setToast(null), 2500); }} />}
+    {creating && <RecordModal config={editorConfig} row={editing} lookups={lookups} onClose={() => setCreating(false)} onSaved={async () => { setCreating(false); await load(); setToast("saved"); setTimeout(() => setToast(null), TOAST_DELAY_MS); }} />}
     {toast && <div className="toast" role="status">{t(toast === "deleted" ? "{item} deleted." : "{item} saved.", { item: t(config.singular) })}</div>}
   </main>;
 }
