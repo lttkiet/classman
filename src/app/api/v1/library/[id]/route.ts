@@ -1,6 +1,7 @@
 import { CenterRole } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { attachmentDisposition } from "@/lib/download";
 import { jsonError } from "@/lib/http";
 import { libraryVisibilityWhere } from "@/lib/library-access";
 import { requireWorkspace, WorkspaceError } from "@/lib/workspace";
@@ -29,12 +30,11 @@ export async function GET(_request: Request, { params }: Context) {
       select: { fileName: true, contentType: true, content: true },
     });
     if (!document) throw new WorkspaceError("Document not found.", 404);
-    const safeName = document.fileName.replace(/[\r\n"\\]/g, "_");
     return new Response(new Uint8Array(document.content), {
       headers: {
         "Content-Type": document.contentType,
         "Content-Length": String(document.content.byteLength),
-        "Content-Disposition": `attachment; filename="${safeName}"; filename*=UTF-8''${encodeURIComponent(document.fileName)}`,
+        "Content-Disposition": attachmentDisposition(document.fileName),
         "X-Content-Type-Options": "nosniff",
         "Cache-Control": "private, no-store",
       },

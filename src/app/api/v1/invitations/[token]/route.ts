@@ -35,6 +35,7 @@ export async function POST(_request: Request, { params }: RouteContext) {
       const accepted = await tx.invitation.updateMany({ where: { id: invitation.id, acceptedAt: null, expiresAt: { gt: new Date() } }, data: { acceptedAt: new Date() } });
       if (!accepted.count) throw new WorkspaceError("This invitation is invalid or has expired.", 404);
       await tx.membership.create({ data: { centerId: invitation.centerId, userId: session.user.id, role: invitation.role } });
+      await tx.invitation.deleteMany({ where: { centerId: invitation.centerId, email: { equals: invitation.email, mode: "insensitive" }, acceptedAt: null } });
     });
     return NextResponse.json({ data: { accepted: true, centerId: invitation.centerId } });
   } catch (error) {

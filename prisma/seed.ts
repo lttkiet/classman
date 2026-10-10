@@ -11,15 +11,16 @@ async function main() {
     membership = await db.membership.create({ data: { userId: owner.id, centerId: center.id, role: "OWNER" }, include: { center: true } });
   }
   const centerId = membership.centerId;
-  const teacher = await db.membership.findFirst({ where: { centerId, role: { in: ["OWNER", "MANAGER"] } } });
-  const teacherId = teacher ? (await db.membership.findUnique({ where: { id: teacher.id } }))?.userId ?? owner.id : owner.id;
+  const teacher = await db.membership.findFirst({ where: { centerId, role: "TEACHER" }, orderBy: { createdAt: "asc" } });
+  const assignedTeacherId = teacher?.userId ?? null;
+  const teacherId = teacher?.userId ?? owner.id;
   const learners = await Promise.all([
     { name: "Mia Chen", email: "mia@example.test", level: "A2 · Elementary", goal: "Build confidence in everyday conversation" },
     { name: "Noah Patel", email: "noah@example.test", level: "B1 · Intermediate", goal: "Prepare for a study abroad interview" },
     { name: "Sofia Nguyen", email: "sofia@example.test", level: "A1 · Beginner", goal: "Read short stories with confidence" },
   ].map(async (item) => {
     const old = await db.learner.findFirst({ where: { centerId, name: item.name } });
-    return old ? db.learner.update({ where: { id: old.id }, data: { ...item, assignedTeacherId: teacherId } }) : db.learner.create({ data: { ...item, centerId, assignedTeacherId: teacherId } });
+    return old ? db.learner.update({ where: { id: old.id }, data: { ...item, assignedTeacherId } }) : db.learner.create({ data: { ...item, centerId, assignedTeacherId } });
   }));
   const [grade6, grade7] = await Promise.all(["Grade 6", "Grade 7"].map((name) => db.grade.upsert({
     where: { centerId_name: { centerId, name } },

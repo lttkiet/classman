@@ -245,10 +245,13 @@ export async function centerStaff(ctx: WorkspaceContext) {
 
 export async function removeStaff(ctx: WorkspaceContext, userId: string) {
   if (!managerRoles.includes(ctx.membership.role)) throw new WorkspaceError("Managers are required to manage staff.", 403);
-  const target = await db.membership.findFirst({ where: { centerId: ctx.center.id, userId } });
+  const target = await db.membership.findFirst({ where: { centerId: ctx.center.id, userId }, include: { user: { select: { email: true } } } });
   if (!target) throw new WorkspaceError("Staff member not found.", 404);
   if (target.role === "OWNER" || target.userId === ctx.user.id) throw new WorkspaceError("The owner cannot be removed.", 403);
-  await db.membership.delete({ where: { id: target.id } });
+  await db.$transaction(async (tx) => {
+    await tx.invitation.deleteMany({ where: { centerId: ctx.center.id, email: { equals: target.user.email, mode: "insensitive" }, acceptedAt: null } });
+    await tx.membership.delete({ where: { id: target.id } });
+  });
 }
 
 export async function addGroupLearner(ctx: WorkspaceContext, groupId: string, learnerId: string) {

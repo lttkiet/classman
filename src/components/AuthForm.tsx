@@ -77,14 +77,14 @@ export function AuthForm({ initialMode }: { initialMode: Mode }) {
 
   return <main className="auth-wrap">
     <aside className="auth-aside">
-      <div className="brand"><div className="brand-mark"><BookOpenCheck size={19} /></div><div><div className="brand-name" style={{ color: "white" }}>teach<span style={{ color: "#b9d7bf" }}>.</span></div><div className="brand-caption">{t("A calmer way to teach")}</div></div></div>
+      <div className="brand"><div className="brand-mark"><BookOpenCheck size={19} /></div><div><div className="brand-name" style={{ color: "white" }}>Classman</div><div className="brand-caption">{t("A calmer way to teach")}</div></div></div>
       <div className="auth-aside-main"><div className="hero-kicker">{t("Made for the moments that matter")}</div><h1>{t("More time for teaching. Less time chasing details.")}</h1><p>{t("Bring your students, classes, lessons, and teaching team together in one thoughtful workspace.")}</p></div>
       <div className="auth-quote">{t("“I can see my whole week at a glance and still give each student the attention they deserve.”")}<strong>— {t("A note from the teaching desk")}</strong></div>
     </aside>
     <section className="auth-main">
       <div className="auth-card">
         <div className="auth-language"><LanguageSelect /></div>
-        <div className="brand auth-mobile-brand"><div className="brand-mark"><BookOpenCheck size={19} /></div><div><div className="brand-name">teach<span style={{ color: "var(--green)" }}>.</span></div><div className="brand-caption">{t("A calmer way to teach")}</div></div></div>
+        <div className="brand auth-mobile-brand"><div className="brand-mark"><BookOpenCheck size={19} /></div><div><div className="brand-name">Classman</div><div className="brand-caption">{t("A calmer way to teach")}</div></div></div>
         <div className="eyebrow">{t("Your teaching workspace")}</div><h2>{t(title)}</h2><p>{t(subtitle)}</p>
         {mode === "register" && !invite ? <div role="status" className="auth-error">{t("Accounts are created by invitation. Ask your center administrator to invite you.")}</div> : <form onSubmit={submit} className="auth-fields">
           {mode === "register" && invite && <div className="field"><label htmlFor="name">{t("Your name")}</label><input id="name" autoComplete="name" value={name} onChange={(event) => setName(event.target.value)} required minLength={2} placeholder="Jamie Parker" /></div>}

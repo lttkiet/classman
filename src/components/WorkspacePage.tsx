@@ -1,8 +1,11 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { BookOpen, CalendarDays, Check, ClipboardList, GraduationCap, Plus, Search, UsersRound, X, Trash2, Pencil, Send, UserPlus } from "lucide-react";
+import { BookOpen, CalendarDays, Check, ClipboardList, GraduationCap, Plus, Search, Eye, UsersRound, X, Trash2, Pencil, Send, UserPlus } from "lucide-react";
 import { useLanguage } from "@/components/LanguageProvider";
+import Link from "next/link";
+import { Modal } from "@/components/Modal";
+import { recordPayload } from "@/lib/record-form";
 
 type Resource = "grades" | "learners" | "groups" | "sessions" | "lessons" | "notes" | "assignments" | "progress";
 type Field = { name: string; label: string; kind?: "text" | "email" | "textarea" | "select" | "datetime-local" | "number"; required?: boolean; full?: boolean; options?: { label: string; value: string }[] };
@@ -41,7 +44,6 @@ function centerLocalValue(value: string | Date) {
   const part = (type: string) => parts.find((item) => item.type === type)?.value ?? "00";
   return `${part("year")}-${part("month")}-${part("day")}T${part("hour")}:${part("minute")}`;
 }
-function centerLocalToIso(value: string) { return new Date(`${value}:00+07:00`).toISOString(); }
 
 export function WorkspacePage({ section, role }: { section: string; role: string }) {
   const { t } = useLanguage();
@@ -49,7 +51,7 @@ export function WorkspacePage({ section, role }: { section: string; role: string
   if (section === "team") return <TeamPage role={role} />;
   if (section === "settings") return <SettingsPage />;
   if (!config) return <section className="page-content"><h1>{t("Page not found")}</h1><p>{t("That workspace section isn’t available.")}</p></section>;
-  return <ResourcePage config={config} role={role} section={section} />;
+  return <ResourcePage key={config.resource} config={config} role={role} section={section} />;
 }
 
 function ResourcePage({ config, role, section }: { config: Config; role: string; section: string }) {
@@ -58,7 +60,9 @@ function ResourcePage({ config, role, section }: { config: Config; role: string;
   const [lookups, setLookups] = useState<Record<string, JsonRow[]>>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [scheduleFilter, setScheduleFilter] = useState("upcoming");
   const [editing, setEditing] = useState<JsonRow | null>(null);
+  const [viewing, setViewing] = useState<JsonRow | null>(null);
   const [rosterGroup, setRosterGroup] = useState<JsonRow | null>(null);
   const [creating, setCreating] = useState(false);
   const [toast, setToast] = useState<"deleted" | "saved" | null>(null);
@@ -77,6 +81,7 @@ function ResourcePage({ config, role, section }: { config: Config; role: string;
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? "Could not load records.");
       setRows((result.data ?? []) as JsonRow[]);
+      setError("");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not load records.");
     } finally { setLoading(false); }
@@ -97,7 +102,13 @@ function ResourcePage({ config, role, section }: { config: Config; role: string;
     })).then((data) => setLookups(Object.fromEntries(data))).catch(() => undefined);
   }, [fields]);
 
-  const filtered = useMemo(() => rows.filter((row) => JSON.stringify(row).toLowerCase().includes(search.toLowerCase())), [rows, search]);
+  const filtered = useMemo(() => rows.filter((row) => {
+    if (!JSON.stringify(row).toLowerCase().includes(search.toLowerCase())) return false;
+    if (config.resource !== "sessions" || scheduleFilter === "all") return true;
+    const date = new Date(String(row.startsAt));
+    if (scheduleFilter === "today") return centerLocalValue(date).slice(0, 10) === centerLocalValue(new Date()).slice(0, 10);
+    return row.status === "SCHEDULED" && new Date(String(row.endsAt)) >= new Date();
+  }), [rows, search, scheduleFilter, config.resource]);
 
   async function remove(row: JsonRow) {
     if (!window.confirm(t("Delete this {item}? This can’t be undone.", { item: t(config.singular) }))) return;
@@ -119,8 +130,8 @@ function ResourcePage({ config, role, section }: { config: Config; role: string;
 
   return <main className="page-content">
     <div className="page-heading"><div><div className="eyebrow">{t("Your teaching workspace")}</div><h1>{t(config.title)}</h1><p>{t(config.description)}</p></div>{canCreate && <button className="button-primary" onClick={() => { setEditing(null); setCreating(true); }}><Plus size={15} /> {t("Add {item}", { item: t(config.singular) })}</button>}</div>
-    {error && <div className="auth-error" role="alert" style={{ marginBottom: 14 }}>{t(error)}<button className="button-quiet" onClick={() => setError("")}><X size={13} /></button></div>}
-    {section === "schedule" && <ScheduleStrip />}
+    {error && <div className="auth-error" role="alert" style={{ marginBottom: 14 }}>{t(error)}<button className="button-quiet" aria-label={t("Dismiss error")} onClick={() => setError("")}><X size={13} /></button></div>}
+    {section === "schedule" && <div className="workflow-toolbar"><div className="segmented-control" role="group" aria-label={t("Filter sessions")}>{["upcoming", "today", "all"].map((value) => <button key={value} aria-pressed={scheduleFilter === value} onClick={() => setScheduleFilter(value)}>{t(value === "upcoming" ? "Upcoming" : value === "today" ? "Today" : "All sessions")}</button>)}</div><span className="field-hint">{t("Times shown in Vietnam time (UTC+7)")}</span></div>}
     <section className="panel">
       <div className="panel-header"><div><div className="panel-title">{filtered.length} {language === "vi" ? t(config.singular) : `${config.singular}${filtered.length === 1 ? "" : config.resource === "groups" ? "es" : "s"}`}</div><p className="panel-subtitle">{t(sectionCopy[section])}</p></div></div>
       <div className="section-toolbar" style={{ padding: "0 16px 14px" }}><label className="search-field"><Search size={14} /><input aria-label={t(`Search ${config.title}…`)} placeholder={t(`Search ${config.title}…`)} value={search} onChange={(event) => setSearch(event.target.value)} /></label></div>
@@ -129,9 +140,10 @@ function ResourcePage({ config, role, section }: { config: Config; role: string;
       ) : filtered.length === 0 ? (
         <div className="empty-state">
           <div className="empty-icon"><config.icon size={19} /></div>
-          <div className="empty-title">{search ? t("Nothing matches that search") : t(`No ${config.title} yet`)}</div>
-          <div className="empty-copy">{search ? t("Try another name or clear your search.") : t(sectionCopy[section])}</div>
-          {canCreate && !search && <button className="button-primary" onClick={() => setCreating(true)}><Plus size={14} /> {t("Add your first {item}", { item: t(config.singular) })}</button>}
+          <div className="empty-title">{search || rows.length ? t("No matching records") : t(`No ${config.title} yet`)}</div>
+          <div className="empty-copy">{search || rows.length ? t("Try another search or filter.") : t(sectionCopy[section])}</div>
+          {(search || rows.length > 0) && <button className="button-secondary" onClick={() => { setSearch(""); setScheduleFilter("all"); }}>{t("Clear filters")}</button>}
+          {canCreate && !search && rows.length === 0 && <button className="button-primary" onClick={() => { setEditing(null); setCreating(true); }}><Plus size={14} /> {t("Add your first {item}", { item: t(config.singular) })}</button>}
         </div>
       ) : (
         <div className="table-wrap"><table className="data-table">
@@ -147,25 +159,45 @@ function ResourcePage({ config, role, section }: { config: Config; role: string;
               ) : <span>{valueAt(row, column.key, language, t)}</span>}
             </td>)}
             <td><div style={{ display: "flex", justifyContent: "flex-end", gap: 3 }}>
-              {config.resource === "groups" && manager && <button className="table-action" title={t("Manage roster")} aria-label={t("Manage {name} roster", { name: String(row.name) })} onClick={() => setRosterGroup(row)}><UserPlus size={13} /></button>}
-              {config.resource === "assignments" && !manager && <button className="table-action" title={t("Toggle completion")} aria-label={t("Toggle assignment completion")} onClick={() => void markAssignment(row)}><Check size={14} /></button>}
-              {(manager || ["sessions", "notes", "progress"].includes(config.resource)) && <button className="table-action" title={t("Edit")} aria-label={t("Edit {item}", { item: t(config.singular) })} onClick={() => { setEditing(row); setCreating(true); }}><Pencil size={13} /></button>}
+              <button className="table-action" title={t("View details")} aria-label={t("View details")} onClick={() => setViewing(row)}><Eye size={14} /><span>{t("View")}</span></button>
+              {config.resource === "groups" && manager && <button className="table-action" title={t("Manage roster")} aria-label={t("Manage {name} roster", { name: String(row.name) })} onClick={() => setRosterGroup(row)}><UserPlus size={13} /><span>{t("Roster")}</span></button>}
+              {config.resource === "assignments" && !manager && <button className="table-action" title={t("Toggle completion")} aria-label={t("Toggle assignment completion")} onClick={() => void markAssignment(row)}><Check size={14} /><span>{t(row.status === "COMPLETED" ? "Reopen" : "Complete")}</span></button>}
+              {(manager || ["sessions", "notes", "progress"].includes(config.resource)) && <button className="table-action" title={t("Edit")} aria-label={t("Edit {item}", { item: t(config.singular) })} onClick={() => { setEditing(row); setCreating(true); }}><Pencil size={13} /><span>{t("Edit")}</span></button>}
               {manager && <button className="table-action" title={t("Delete")} aria-label={t("Delete {item}", { item: t(config.singular) })} onClick={() => void remove(row)}><Trash2 size={13} /></button>}
             </div></td>
           </tr>)}</tbody>
         </table></div>
       )}
     </section>
+    {viewing && <RecordDetails config={editorConfig} row={viewing} lookups={lookups} onClose={() => setViewing(null)} />}
     {rosterGroup && <GroupRosterDialog group={rosterGroup} onClose={() => setRosterGroup(null)} onChanged={() => void load()} />}
     {creating && <RecordModal config={editorConfig} row={editing} lookups={lookups} onClose={() => setCreating(false)} onSaved={async () => { setCreating(false); await load(); setToast("saved"); setTimeout(() => setToast(null), 2500); }} />}
     {toast && <div className="toast" role="status">{t(toast === "deleted" ? "{item} deleted." : "{item} saved.", { item: t(config.singular) })}</div>}
   </main>;
 }
 
+function RecordDetails({ config, row, lookups, onClose }: { config: Config; row: JsonRow; lookups: Record<string, JsonRow[]>; onClose: () => void }) {
+  const { language, t } = useLanguage();
+  function detail(field: Field) {
+    if (field.kind === "datetime-local" && row[field.name]) return new Intl.DateTimeFormat(language === "vi" ? "vi-VN" : "en", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Ho_Chi_Minh" }).format(new Date(String(row[field.name])));
+    const relations: Record<string, string> = { learnerId: "learner", groupId: "group", gradeId: "grade", teacherId: "teacher", assignedTeacherId: "assignedTeacher" };
+    const relation = relations[field.name];
+    if (relation) {
+      const record = row[relation] as JsonRow | undefined;
+      if (record?.name) return String(record.name);
+      const endpoint = field.name === "learnerId" ? "learners" : field.name === "groupId" ? "groups" : field.name === "gradeId" ? "grades" : "team";
+      return String(lookups[endpoint]?.find((item) => item.id === row[field.name])?.name ?? "—");
+    }
+    return valueAt(row, field.name, language, t);
+  }
+  return <Modal labelledBy="record-details-heading" onClose={onClose}><header className="modal-head"><h2 id="record-details-heading">{t("View details")} · {t(config.singular)}</h2><button className="modal-close" onClick={onClose} aria-label={t("Close")}><X size={17} /></button></header><div className="modal-body"><dl className="form-grid">{config.fields.map((field) => <div className={`field ${field.full ? "full" : ""}`} key={field.name}><dt>{t(field.label)}</dt><dd style={{ margin: 0, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{detail(field)}</dd></div>)}</dl></div></Modal>;
+}
+
 function RecordModal({ config, row, lookups, onClose, onSaved }: { config: Config; row: JsonRow | null; lookups: Record<string, JsonRow[]>; onClose: () => void; onSaved: () => void }) {
   const { t } = useLanguage();
   const [form, setForm] = useState<JsonRow>(() => {
     const initial: JsonRow = { ...(row ?? {}) };
+    if (!row) for (const field of config.fields) if (field.options?.length) initial[field.name] = field.options[0].value;
     for (const field of config.fields) if (field.kind === "datetime-local" && (typeof initial[field.name] === "string" || initial[field.name] instanceof Date)) initial[field.name] = centerLocalValue(initial[field.name] as string | Date);
     if (config.resource === "sessions") { initial.learnerId ??= ""; initial.groupId ??= ""; }
     if (config.resource === "assignments") { initial.learnerId ??= ""; initial.groupId ??= ""; }
@@ -173,25 +205,18 @@ function RecordModal({ config, row, lookups, onClose, onSaved }: { config: Confi
   });
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [targetType, setTargetType] = useState(row?.groupId ? "groupId" : "learnerId");
+  const hasTarget = config.resource === "sessions" || config.resource === "assignments";
+  const visibleFields = config.fields.filter((field) => !hasTarget || !["learnerId", "groupId"].includes(field.name) || field.name === targetType);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
     setError("");
-    const payload: JsonRow = { ...form };
-    delete payload.id; delete payload.centerId; delete payload.createdAt; delete payload.updatedAt; delete payload.assignedTeacher; delete payload.teacher; delete payload.learner; delete payload.group;
-    for (const field of config.fields) if (field.kind === "datetime-local" && payload[field.name]) payload[field.name] = centerLocalToIso(String(payload[field.name]));
-    if (config.resource === "sessions" || config.resource === "assignments") {
-      if (row) {
-        payload.learnerId = payload.learnerId || null;
-        payload.groupId = payload.groupId || null;
-      } else {
-        if (!payload.learnerId) delete payload.learnerId;
-        if (!payload.groupId) delete payload.groupId;
-      }
-    }
-    if (config.resource === "learners" && payload.assignedTeacherId === "") payload.assignedTeacherId = null;
-    if (config.resource === "progress" && payload.score !== "" && payload.score !== undefined) payload.score = Number(payload.score);
     try {
+      const values = hasTarget ? { ...form, [targetType === "learnerId" ? "groupId" : "learnerId"]: null } : form;
+      const payload = recordPayload(config.resource, values, config.fields, Boolean(row));
+      if (hasTarget && !payload[targetType]) throw new Error("Choose a student or class.");
+      if (config.resource === "sessions" && new Date(String(payload.endsAt)) <= new Date(String(payload.startsAt))) throw new Error("End time must be after start time.");
       const response = await fetch(`/api/v1/${config.resource}${row ? `/${row.id}` : ""}`, { method: row ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? "Could not save this record.");
@@ -207,14 +232,7 @@ function RecordModal({ config, row, lookups, onClose, onSaved }: { config: Confi
     if (field.name === "teacherId") return (lookups.team ?? []).map((item) => ({ value: String(item.id), label: String(item.name) }));
     return field.options ?? [];
   }
-  return <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><section className="modal" role="dialog" aria-modal="true" aria-labelledby="record-heading"><header className="modal-head"><div><h2 id="record-heading">{t(row ? "Update" : "Add")} {t(config.singular)}</h2><p>{t("Details are saved to your center workspace.")}</p></div><button className="modal-close" onClick={onClose} aria-label={t("Close")}><X size={17} /></button></header><form onSubmit={submit} className="modal-body"><div className="form-grid">{config.fields.map((field) => <div className={`field ${field.full ? "full" : ""}`} key={field.name}><label htmlFor={field.name}>{t(field.label)}{field.required ? " *" : ""}</label>{field.kind === "textarea" ? <textarea id={field.name} value={String(form[field.name] ?? "")} onChange={(event) => setForm({ ...form, [field.name]: event.target.value })} required={field.required} /> : field.kind === "select" ? <select id={field.name} value={String(form[field.name] ?? "")} onChange={(event) => setForm({ ...form, [field.name]: event.target.value })} required={field.required}><option value="">{t("Choose {item}…", { item: t(field.label.toLowerCase()) })}</option>{options(field).map((option) => <option key={option.value} value={option.value}>{t(option.label)}</option>)}</select> : <input id={field.name} type={field.kind ?? "text"} step={field.kind === "number" ? "any" : undefined} value={String(form[field.name] ?? "")} onChange={(event) => setForm({ ...form, [field.name]: event.target.value })} required={field.required} />}</div>)}</div>{error && <p className="form-error" role="alert" style={{ marginTop: 12 }}>{t(error)}</p>}<div className="modal-actions"><button type="button" className="button-secondary" onClick={onClose}>{t("Cancel")}</button><button className="button-primary" disabled={busy}>{busy ? t("Saving…") : row ? t("Save changes") : t("Add {item}", { item: t(config.singular) })}</button></div></form></section></div>;
-}
-
-function ScheduleStrip() {
-  const { language, t } = useLanguage();
-  const today = new Date();
-  const days = Array.from({ length: 7 }, (_, index) => { const date = new Date(today); date.setDate(today.getDate() - today.getDay() + index + 1); return date; });
-  return <section className="panel" style={{ marginBottom: 15 }}><div className="schedule-week">{days.map((date) => <span key={date.toISOString()} className={date.toDateString() === today.toDateString() ? "selected" : ""}><small>{new Intl.DateTimeFormat(language === "vi" ? "vi-VN" : "en", { weekday: "short" }).format(date)}</small><b>{date.getDate()}</b></span>)}</div><span className="sr-only">{t("Today")}</span></section>;
+  return <Modal labelledBy="record-heading" onClose={onClose}><header className="modal-head"><div><h2 id="record-heading">{t(row ? "Update" : "Add")} {t(config.singular)}</h2><p>{t("Details are saved to your center workspace.")}</p></div><button className="modal-close" onClick={onClose} aria-label={t("Close")}><X size={17} /></button></header><form onSubmit={submit} className="modal-body"><p className="field-hint">{t("Fields marked * are required.")}</p>{hasTarget && <fieldset className="target-choice"><legend>{t("Who is this for?")}</legend><div className="segmented-control">{["learnerId", "groupId"].map((value) => <button type="button" key={value} aria-pressed={targetType === value} onClick={() => setTargetType(value)}>{t(value === "learnerId" ? "One student" : "Whole class")}</button>)}</div></fieldset>}{config.resource === "sessions" && <p className="field-hint">{t("Times shown in Vietnam time (UTC+7)")}</p>}<div className="form-grid">{visibleFields.map((field) => <div className={`field ${field.full ? "full" : ""}`} key={field.name}><label htmlFor={field.name}>{t(field.label)}{field.required || (hasTarget && field.name === targetType) ? " *" : ""}</label>{field.kind === "textarea" ? <textarea id={field.name} value={String(form[field.name] ?? "")} onChange={(event) => setForm({ ...form, [field.name]: event.target.value })} required={field.required || (hasTarget && field.name === targetType)} /> : field.kind === "select" ? <select id={field.name} value={String(form[field.name] ?? "")} onChange={(event) => setForm({ ...form, [field.name]: event.target.value })} required={field.required || (hasTarget && field.name === targetType)}><option value="">{t("Choose {item}…", { item: t(field.label.toLowerCase()) })}</option>{options(field).map((option) => <option key={option.value} value={option.value}>{t(option.label)}</option>)}</select> : <input id={field.name} type={field.kind ?? "text"} step={field.kind === "number" ? "any" : undefined} value={String(form[field.name] ?? "")} onChange={(event) => setForm({ ...form, [field.name]: event.target.value })} required={field.required || (hasTarget && field.name === targetType)} />}{field.kind === "select" && !field.options && options(field).length === 0 && <p className="field-hint">{t("No options available yet.")} <Link href={field.name === "gradeId" ? "/grades" : field.name === "groupId" ? "/groups" : field.name === "learnerId" ? "/learners" : "/team"}>{t(field.name === "gradeId" ? "Set up grades" : field.name === "groupId" ? "Set up classes" : field.name === "learnerId" ? "Check students" : "Check team")}</Link></p>}</div>)}</div>{error && <p className="form-error" role="alert" style={{ marginTop: 12 }}>{t(error)}</p>}<div className="modal-actions"><button type="button" className="button-secondary" onClick={onClose}>{t("Cancel")}</button><button className="button-primary" disabled={busy}>{busy ? t("Saving…") : row ? t("Save changes") : t("Add {item}", { item: t(config.singular) })}</button></div></form></Modal>;
 }
 
 function GroupRosterDialog({ group, onClose, onChanged }: { group: JsonRow; onClose: () => void; onChanged: () => void }) {
@@ -249,7 +267,7 @@ function GroupRosterDialog({ group, onClose, onChanged }: { group: JsonRow; onCl
     const result = response.status === 204 ? {} : await response.json();
     if (!response.ok) setError(result.error ?? "Could not remove student."); else { await load(); onChanged(); }
   }
-  return <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><section className="modal" role="dialog" aria-modal="true" aria-labelledby="roster-heading"><header className="modal-head"><div><h2 id="roster-heading">{String(group.name)} · {t("Class roster")}</h2><p>{t("Add students who belong to this class.")}</p></div><button className="modal-close" onClick={onClose} aria-label={t("Close")}><X size={17} /></button></header><div className="modal-body"><div className="field"><label htmlFor="roster-learner">{t("Add a student")}</label><div style={{ display: "flex", gap: 8 }}><select id="roster-learner" value={learnerId} onChange={(event) => setLearnerId(event.target.value)} style={{ flex: 1, border: "1px solid var(--line)", borderRadius: 9, padding: "0 10px" }}><option value="">{t("Choose a student…")}</option>{available.map((learner) => <option key={String(learner.id)} value={String(learner.id)}>{String(learner.name)}</option>)}</select><button className="button-primary" type="button" disabled={busy || !learnerId} onClick={() => void addLearner()}><Plus size={14} /> {t("Add")}</button></div></div>{error && <p className="form-error" style={{ marginTop: 10 }}>{t(error)}</p>}<div style={{ marginTop: 18 }}><div className="panel-title" style={{ marginBottom: 8 }}>{t("Current students · {count}", { count: learners.length })}</div>{learners.length ? learners.map((learner) => <div className="team-row" key={String(learner.id)} style={{ paddingLeft: 0, paddingRight: 0 }}><div className="person-avatar">{initials(String(learner.name))}</div><div className="team-info"><strong>{String(learner.name)}</strong><span>{String(learner.level ?? t("Level not set"))}</span></div><button className="table-action" aria-label={t("Remove {name} from class", { name: String(learner.name) })} onClick={() => void removeLearner(String(learner.id))}><Trash2 size={13} /></button></div>) : <p className="panel-subtitle">{t("No students in this class yet.")}</p>}</div></div></section></div>;
+  return <Modal labelledBy="roster-heading" onClose={onClose}><header className="modal-head"><div><h2 id="roster-heading">{String(group.name)} · {t("Class roster")}</h2><p>{t("Add students who belong to this class.")}</p></div><button className="modal-close" onClick={onClose} aria-label={t("Close")}><X size={17} /></button></header><div className="modal-body"><div className="field"><label htmlFor="roster-learner">{t("Add a student")}</label><div style={{ display: "flex", gap: 8 }}><select id="roster-learner" value={learnerId} onChange={(event) => setLearnerId(event.target.value)} style={{ flex: 1, border: "1px solid var(--line)", borderRadius: 9, padding: "0 10px" }}><option value="">{t("Choose a student…")}</option>{available.map((learner) => <option key={String(learner.id)} value={String(learner.id)}>{String(learner.name)}</option>)}</select><button className="button-primary" type="button" disabled={busy || !learnerId} onClick={() => void addLearner()}><Plus size={14} /> {t("Add")}</button></div></div>{error && <p className="form-error" style={{ marginTop: 10 }}>{t(error)}</p>}<div style={{ marginTop: 18 }}><div className="panel-title" style={{ marginBottom: 8 }}>{t("Current students · {count}", { count: learners.length })}</div>{learners.length ? learners.map((learner) => <div className="team-row" key={String(learner.id)} style={{ paddingLeft: 0, paddingRight: 0 }}><div className="person-avatar">{initials(String(learner.name))}</div><div className="team-info"><strong>{String(learner.name)}</strong><span>{String(learner.level ?? t("Level not set"))}</span></div><button className="table-action" aria-label={t("Remove {name} from class", { name: String(learner.name) })} onClick={() => void removeLearner(String(learner.id))}><Trash2 size={13} /></button></div>) : <p className="panel-subtitle">{t("No students in this class yet.")}</p>}</div></div></Modal>;
 }
 
 function TeamPage({ role }: { role: string }) {
