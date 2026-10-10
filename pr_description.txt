@@ -1,0 +1,7 @@
+Title: 🧹 Simplify nested ternary operator in listResource
+
+Description:
+🎯 **What:** Simplified the deeply nested ternary operator in the `listResource` function inside `src/lib/api.ts` into a cleaner `switch` statement for `include` and extracted `orderBy` into its own variable.
+💡 **Why:** A highly nested ternary block across multiple lines is notoriously hard to read and parse mentally. A switch statement with a fallthrough default explicitly structures the code, scales significantly better for new cases, and improves maintainability.
+✅ **Verification:** Verified by ensuring the code passes linting (`npm run lint`), passing all tests (`npm test`), and having identical output object structure.
+✨ **Result:** Improved codebase readability and maintainability without changing any functionality.

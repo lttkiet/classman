@@ -42,17 +42,37 @@ const teacherScope = (resource: ResourceName, userId: string): Filter => {
 export async function listResource(ctx: WorkspaceContext, resource: ResourceName) {
   const where: Filter = { centerId: ctx.center.id };
   if (!canSeeAllCenterRecords(ctx.membership.role)) Object.assign(where, teacherScope(resource, ctx.user.id));
+
+  let include: Record<string, unknown> | undefined = undefined;
+
+  switch (resource) {
+    case "grades":
+      include = { classes: { where: ctx.membership.role === "TEACHER" ? { learners: { some: { learner: { assignedTeacherId: ctx.user.id } } } } : undefined } };
+      break;
+    case "learners":
+      include = { assignedTeacher: { select: { id: true, name: true } }, groupLinks: { include: { group: { include: { grade: true } } } } };
+      break;
+    case "groups":
+      include = { grade: true, learners: { where: groupRosterWhere(ctx.membership.role, ctx.user.id), include: { learner: true } } };
+      break;
+    case "sessions":
+      include = { learner: true, group: true, teacher: { select: { id: true, name: true } } };
+      break;
+    case "notes":
+    case "progress":
+      include = { learner: true, teacher: { select: { name: true } } };
+      break;
+    case "assignments":
+      include = { learner: true, group: true };
+      break;
+  }
+
+  const orderBy = resource === "sessions" ? { startsAt: "asc" } : { createdAt: "desc" };
+
   return delegates[resource].findMany({
     where,
-    orderBy: resource === "sessions" ? { startsAt: "asc" } : { createdAt: "desc" },
-    include: resource === "grades" ? { classes: { where: ctx.membership.role === "TEACHER" ? { learners: { some: { learner: { assignedTeacherId: ctx.user.id } } } } : undefined } }
-      : resource === "learners" ? { assignedTeacher: { select: { id: true, name: true } }, groupLinks: { include: { group: { include: { grade: true } } } } }
-      : resource === "groups" ? { grade: true, learners: { where: groupRosterWhere(ctx.membership.role, ctx.user.id), include: { learner: true } } }
-      : resource === "sessions" ? { learner: true, group: true, teacher: { select: { id: true, name: true } } }
-      : resource === "notes" ? { learner: true, teacher: { select: { name: true } } }
-      : resource === "assignments" ? { learner: true, group: true }
-      : resource === "progress" ? { learner: true, teacher: { select: { name: true } } }
-      : undefined,
+    orderBy,
+    include,
   });
 }
 
