@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { spawn, spawnSync } from "node:child_process";
+import spawn from "cross-spawn";
 import { setTimeout as delay } from "node:timers/promises";
 
 const envPath = ".env";
@@ -60,7 +60,7 @@ function assertDevelopmentEnvironment(values) {
 
 function run(command, args, options = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { stdio: "inherit", env: process.env, shell: process.platform === "win32" && command.endsWith(".cmd"), ...options });
+    const child = spawn(command, args, { stdio: "inherit", env: process.env, ...options });
     child.once("error", reject);
     child.once("exit", (code) => code === 0 ? resolve() : reject(new Error(`${command} ${args.join(" ")} exited with code ${code}.`)));
   });
@@ -72,7 +72,7 @@ function npmCommand() {
 
 async function waitForDatabase() {
   for (let attempt = 0; attempt < 30; attempt += 1) {
-    const result = spawnSync("docker", ["compose", "exec", "-T", "db", "pg_isready", "-U", "postgres", "-d", "teach_portal"], { stdio: "ignore" });
+    const result = spawn.sync("docker", ["compose", "exec", "-T", "db", "pg_isready", "-U", "postgres", "-d", "teach_portal"], { stdio: "ignore" });
     if (result.status === 0) return;
     await delay(1000);
   }
