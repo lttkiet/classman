@@ -16,7 +16,7 @@ export function moduleLoader(overrides: Record<string, unknown>) {
     const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText;
     const require = (id: string): unknown => Object.hasOwn(overrides, id) ? overrides[id]
       : id.startsWith("@/") ? load(`src/${id.slice(2)}.${existsSync(`src/${id.slice(2)}.ts`) ? "ts" : "tsx"}`) : nativeRequire(id);
-    runInNewContext(code, { exports, require, console, Date, Object, Set, Response, Request, Headers, Uint8Array, encodeURIComponent });
+    runInNewContext(code, { exports, require, console, Date, Object, Set, Response, Request, Headers, Uint8Array, encodeURIComponent, process: { env: { NODE_ENV: 'test' } } });
     return exports as T;
   }
   return load;
